@@ -152,6 +152,7 @@ export default function HomePage() {
                 value="+4.2"
                 suffix="%"
                 accent="purple"
+                href="/health"
               />
 
               {/* EMERGENCY */}
