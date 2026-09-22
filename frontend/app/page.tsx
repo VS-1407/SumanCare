@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 
 import {
@@ -20,8 +25,9 @@ import {
   Send,
   ShieldAlert,
   Sparkles,
-  TrendingUp,
   UserRound,
+  LogIn,
+  UserPlus,
   X,
 } from "lucide-react";
 
@@ -31,7 +37,6 @@ export default function HomePage() {
   /* ================================================= */
 
   const [chatOpen, setChatOpen] = useState(false);
-
   const [input, setInput] = useState("");
 
   const [messages, setMessages] = useState<
@@ -45,6 +50,39 @@ export default function HomePage() {
       text: "Hi Vaibhav 👋 I'm SumanCare AI. I can help you understand your health data, medicines, trends, and daily health habits.",
     },
   ]);
+
+  /* ================================================= */
+  /* MENU STATE */
+  /* ================================================= */
+
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  /* ================================================= */
+  /* LIVE DATE */
+  /* ================================================= */
+
+  const [currentDate, setCurrentDate] = useState("");
+
+  useEffect(() => {
+    const updateDate = () => {
+      const now = new Date();
+
+      const formattedDate = now.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      });
+
+      setCurrentDate(formattedDate);
+    };
+
+    updateDate();
+
+    // Update automatically every minute
+    const interval = setInterval(updateDate, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   /* ================================================= */
   /* SCROLL REVEAL */
@@ -129,9 +167,7 @@ export default function HomePage() {
       ) {
         response =
           "You can focus on consistent sleep, regular physical activity, hydration, medication adherence, and recording your daily health measurements. SumanCare can track these patterns over time.";
-      } else if (
-        lowerText.includes("sleep")
-      ) {
+      } else if (lowerText.includes("sleep")) {
         response =
           "Sleep is one of the lifestyle factors SumanCare can monitor. Consistent sleep patterns can support overall wellbeing. Your future health trend analysis can compare sleep with activity and other recorded health measurements.";
       } else if (
@@ -159,7 +195,7 @@ export default function HomePage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#eef7f4] text-[#14201d]">
+    <main className="min-h-screen bg-[#eef7f4] pb-24 text-[#14201d] sm:pb-0">
 
       {/* ================================================= */}
       {/* PREMIUM BACKGROUND */}
@@ -189,16 +225,127 @@ export default function HomePage() {
           {/* HEADER */}
           {/* ================================================= */}
 
-          <header className="flex items-center justify-between px-5 py-5 sm:px-8 lg:px-10">
+          <header className="relative flex items-center justify-between px-5 py-5 sm:px-8 lg:px-10">
+
+            {/* LEFT SIDE */}
 
             <div className="flex items-center gap-3">
 
-              <button
-                type="button"
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-white bg-white/90 text-slate-600 shadow-[0_5px_20px_rgba(20,60,50,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_25px_rgba(20,60,50,0.10)]"
-              >
-                <span className="text-lg">☰</span>
-              </button>
+              {/* HAMBURGER */}
+
+              <div className="relative">
+
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen((prev) => !prev)}
+                  aria-label="Open menu"
+                  aria-expanded={menuOpen}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-white bg-white/90 text-slate-600 shadow-[0_5px_20px_rgba(20,60,50,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_25px_rgba(20,60,50,0.10)]"
+                >
+                  <span className="text-xl leading-none">
+                    ☰
+                  </span>
+                </button>
+
+                {/* ================================================= */}
+                {/* PROFILE / AUTH MENU */}
+                {/* ================================================= */}
+
+                {menuOpen && (
+
+                  <div className="absolute left-0 top-14 z-[80] w-52 overflow-hidden rounded-[22px] border border-white/90 bg-white/95 p-2 shadow-[0_20px_60px_rgba(20,60,50,0.15)] backdrop-blur-2xl">
+
+                    <div className="px-3 pb-2 pt-2">
+
+                      <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-600">
+                        Account
+                      </p>
+
+                      <p className="mt-1 text-sm font-semibold text-slate-800">
+                        SumanCare
+                      </p>
+
+                    </div>
+
+                    {/* PROFILE */}
+
+                    <Link
+                      href="/profile"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700"
+                    >
+
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                        <UserRound size={17} />
+                      </div>
+
+                      <div>
+                        <p className="font-medium">
+                          Profile
+                        </p>
+
+                        <p className="text-[9px] text-slate-400">
+                          Your health profile
+                        </p>
+                      </div>
+
+                    </Link>
+
+                    {/* LOGIN */}
+
+                    <Link
+                      href="/login"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
+                    >
+
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                        <LogIn size={17} />
+                      </div>
+
+                      <div>
+                        <p className="font-medium">
+                          Login
+                        </p>
+
+                        <p className="text-[9px] text-slate-400">
+                          Access your account
+                        </p>
+                      </div>
+
+                    </Link>
+
+                    {/* SIGN UP */}
+
+                    <Link
+                      href="/signup"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-slate-600 transition hover:bg-purple-50 hover:text-purple-700"
+                    >
+
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
+                        <UserPlus size={17} />
+                      </div>
+
+                      <div>
+                        <p className="font-medium">
+                          Sign Up
+                        </p>
+
+                        <p className="text-[9px] text-slate-400">
+                          Create your account
+                        </p>
+                      </div>
+
+                    </Link>
+
+                  </div>
+
+                )}
+
+              </div>
+
+              {/* BRAND */}
 
               <div className="hidden sm:block">
 
@@ -233,6 +380,8 @@ export default function HomePage() {
               </div>
 
             </div>
+
+            {/* RIGHT SIDE */}
 
             <div className="flex items-center gap-2">
 
@@ -274,8 +423,10 @@ export default function HomePage() {
 
               <div className="mx-auto max-w-5xl text-center">
 
+                {/* LIVE DATE */}
+
                 <p className="mb-3 text-xs font-medium tracking-wide text-slate-400">
-                  Sunday, September 13
+                  {currentDate || "Loading date..."}
                 </p>
 
                 <h2 className="text-3xl font-medium tracking-[-0.04em] text-slate-800 sm:text-5xl">
@@ -300,35 +451,19 @@ export default function HomePage() {
                   className="ai-orb group relative mx-auto mt-8 flex h-40 w-40 cursor-pointer items-center justify-center rounded-full outline-none sm:h-48 sm:w-48"
                 >
 
-                  {/* Outer glow */}
-
                   <div className="absolute inset-[-25px] rounded-full bg-emerald-200/35 blur-3xl transition-all duration-500 group-hover:bg-emerald-200/50" />
-
-                  {/* Outer ring */}
 
                   <div className="absolute inset-[-10px] rounded-full border border-emerald-200/30 transition-all duration-500 group-hover:scale-105 group-hover:border-emerald-300/50" />
 
-                  {/* Second ring */}
-
                   <div className="absolute inset-[-18px] rounded-full border border-white/70 transition-all duration-500 group-hover:scale-110" />
-
-                  {/* Glow */}
 
                   <div className="absolute h-36 w-36 rounded-full bg-emerald-300/20 blur-xl transition-all duration-500 group-hover:scale-110 sm:h-44 sm:w-44" />
 
-                  {/* Main orb */}
-
                   <div className="absolute h-28 w-28 rounded-full bg-gradient-to-br from-[#b9f8df] via-[#19b986] to-[#03483b] shadow-[0_20px_55px_rgba(7,120,92,0.30)] transition-all duration-500 group-hover:scale-105 group-hover:shadow-[0_25px_70px_rgba(7,120,92,0.42)] sm:h-36 sm:w-36" />
-
-                  {/* Inner orb */}
 
                   <div className="absolute h-24 w-24 rounded-full bg-[radial-gradient(circle_at_35%_25%,#dffff2_0%,#35d3a1_24%,#08785c_56%,#063f35_100%)] shadow-inner sm:h-32 sm:w-32" />
 
-                  {/* Highlight */}
-
                   <div className="absolute h-14 w-14 rounded-full bg-[radial-gradient(circle_at_35%_30%,#ffffff,#72edc0_35%,#08785c_82%)] blur-[1px] transition-transform duration-500 group-hover:scale-110 sm:h-20 sm:w-20" />
-
-                  {/* AI icon */}
 
                   <Sparkles
                     className="relative z-10 text-white/95 drop-shadow-sm transition-transform duration-500 group-hover:scale-110"
@@ -338,7 +473,7 @@ export default function HomePage() {
 
                 </button>
 
-                {/* AI status */}
+                {/* AI STATUS */}
 
                 <div className="mx-auto mt-5 flex w-fit items-center gap-2 rounded-full border border-emerald-100 bg-white/70 px-3 py-1.5 shadow-[0_5px_20px_rgba(20,80,60,0.04)] backdrop-blur">
 
@@ -640,7 +775,7 @@ export default function HomePage() {
 
                     <Reveal delay={300}>
                       <MetricCard
-                        icon={<TrendingUp size={18} />}
+                        icon={<TrendingUpIcon />}
                         label="Activity"
                         value="6,420"
                         unit="steps"
@@ -906,65 +1041,66 @@ export default function HomePage() {
 
           </section>
 
-          {/* ================================================= */}
-          {/* MOBILE NAVIGATION */}
-          {/* ================================================= */}
-
-          <nav className="sticky bottom-0 border-t border-[#e7efec] bg-white/90 px-5 py-3 backdrop-blur-2xl sm:hidden">
-
-            <div className="flex items-center justify-around">
-
-              <BottomNavItem
-                icon={<Home size={20} />}
-                label="Home"
-                active
-              />
-
-              <BottomNavItem
-                icon={<Activity size={20} />}
-                label="Health"
-                href="/health"
-              />
-
-              {/* AI BUTTON */}
-
-              <button
-                type="button"
-                onClick={() => setChatOpen(true)}
-                aria-label="Open SumanCare AI"
-                className="group flex flex-col items-center gap-1 text-[10px] font-semibold text-emerald-600"
-              >
-
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-[0_6px_18px_rgba(16,185,129,0.25)] transition-all duration-300 group-hover:scale-105 group-hover:shadow-[0_8px_25px_rgba(16,185,129,0.35)] group-active:scale-95">
-
-                  <MessageCircle size={20} />
-
-                </div>
-
-                <span>
-                  AI
-                </span>
-
-              </button>
-
-              <BottomNavItem
-                icon={<Pill size={20} />}
-                label="Medicine"
-                href="/medicines"
-              />
-
-              <BottomNavItem
-                icon={<UserRound size={20} />}
-                label="Profile"
-              />
-
-            </div>
-
-          </nav>
-
         </div>
 
       </div>
+
+      {/* ================================================= */}
+      {/* FIXED MOBILE NAVIGATION */}
+      {/* ================================================= */}
+
+      <nav className="fixed bottom-0 left-0 right-0 z-[70] border-t border-white/80 bg-white/95 px-4 py-2.5 shadow-[0_-10px_35px_rgba(20,70,60,0.08)] backdrop-blur-2xl sm:hidden">
+
+        <div className="mx-auto flex max-w-md items-center justify-around">
+
+          <BottomNavItem
+            icon={<Home size={20} />}
+            label="Home"
+            active
+          />
+
+          <BottomNavItem
+            icon={<Activity size={20} />}
+            label="Health"
+            href="/health"
+          />
+
+          {/* AI BUTTON */}
+
+          <button
+            type="button"
+            onClick={() => setChatOpen(true)}
+            aria-label="Open SumanCare AI"
+            className="group flex flex-col items-center gap-1 text-[10px] font-semibold text-emerald-600"
+          >
+
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-[0_6px_18px_rgba(16,185,129,0.25)] transition-all duration-300 group-hover:scale-105 group-hover:shadow-[0_8px_25px_rgba(16,185,129,0.35)] group-active:scale-95">
+
+              <MessageCircle size={20} />
+
+            </div>
+
+            <span>
+              AI
+            </span>
+
+          </button>
+
+          <BottomNavItem
+            icon={<Pill size={20} />}
+            label="Medicine"
+            href="/medicines"
+          />
+
+          <BottomNavItem
+            icon={<UserRound size={20} />}
+            label="Profile"
+            href="/profile"
+          />
+
+        </div>
+
+      </nav>
 
       {/* ================================================= */}
       {/* AI CHAT MODAL */}
@@ -1158,8 +1294,6 @@ export default function HomePage() {
 
       <style jsx global>{`
 
-        /* SCROLL ANIMATION */
-
         .reveal-on-scroll {
           opacity: 0;
           transform: translateY(28px);
@@ -1175,8 +1309,6 @@ export default function HomePage() {
           opacity: 1;
           transform: translateY(0);
         }
-
-        /* AI ORB FLOAT */
 
         .ai-orb {
           animation: premiumFloat 5s ease-in-out infinite;
@@ -1196,8 +1328,6 @@ export default function HomePage() {
 
         }
 
-        /* CHAT OPEN ANIMATION */
-
         .chat-window {
           animation: chatAppear 350ms cubic-bezier(0.22, 1, 0.36, 1);
           transform-origin: bottom right;
@@ -1216,8 +1346,6 @@ export default function HomePage() {
           }
 
         }
-
-        /* REDUCE MOTION */
 
         @media (prefers-reduced-motion: reduce) {
 
@@ -1406,6 +1534,28 @@ function MetricCard({
       </div>
 
     </div>
+  );
+}
+
+/* ================================================= */
+/* TRENDING UP ICON */
+/* ================================================= */
+
+function TrendingUpIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="3 17 9 11 13 15 21 7" />
+      <polyline points="14 7 21 7 21 14" />
+    </svg>
   );
 }
 
