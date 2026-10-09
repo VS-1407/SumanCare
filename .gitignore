@@ -1,9 +1,19 @@
 __pycache__/
-*.pyc
+*.py[cod]
 .env
+.env.*
+!.env.example
 venv/
 .venv/
 node_modules/
 *.log
 .next/
-out/git statusgit status
+out/
+.pytest_cache/
+.mypy_cache/
+uploads/
+reports/
+*.sql.gz
+*.dump
+*.bak
+database/*backup*.sql
