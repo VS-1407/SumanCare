@@ -8,6 +8,28 @@ import {
 } from "react";
 import Link from "next/link";
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+type Patient = {
+  id: number;
+  name: string;
+  email?: string | null;
+};
+
+type VitalRecord = {
+  id: number;
+  patient_id: number;
+  recorded_at?: string | null;
+  systolic_bp?: number | null;
+  diastolic_bp?: number | null;
+  heart_rate?: number | null;
+  blood_glucose?: number | string | null;
+  weight_kg?: number | string | null;
+  oxygen_level?: number | string | null;
+};
+
+
 import {
   Activity,
   ArrowRight,
@@ -29,9 +51,198 @@ import {
   LogIn,
   UserPlus,
   X,
+  TrendingUp,
 } from "lucide-react";
 
+type MonitoringSummary = {
+  monitoring_score: number | null;
+  monitoring_level: string;
+  monitoring_explanation: string;
+  contributing_factors: string[];
+  readings_analyzed: number;
+  disclaimer: string;
+};
+
 export default function HomePage() {
+
+  const [patient, setPatient] = useState<Patient | null>(null);
+  const [latestVital, setLatestVital] = useState<VitalRecord | null>(null);
+  const [monitoringSummary, setMonitoringSummary] =
+    useState<MonitoringSummary | null>(null);
+
+  const [monitoringLoading, setMonitoringLoading] =
+    useState(true);
+    useEffect(() => {
+    let cancelled = false;
+
+    async function loadMonitoringSummary() {
+      try {
+        const token = sessionStorage.getItem("sumancare_access_token");
+
+        if (!token) return;
+
+        const response = await fetch(
+          `${API_BASE_URL}/health-risk/summary`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Unable to load health monitoring data.");
+        }
+
+        const data: MonitoringSummary = await response.json();
+        console.log("Homepage monitoring API response:", data);
+
+        if (!cancelled) {
+          setMonitoringSummary(data);
+        }
+      } catch (error) {
+        console.error("Monitoring summary could not be loaded:", error);
+      } finally {
+        if (!cancelled) {
+          setMonitoringLoading(false);
+        }
+      }
+    }
+
+    void loadMonitoringSummary();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [dataError, setDataError] = useState("");
+  const [riskStatus, setRiskStatus] = useState("Not assessed");
+
+  const [lifestyleData, setLifestyleData] = useState<{
+    steps?: number | null;
+    sleep_hours?: number | string | null;
+    water_intake_liters?: number | string | null;
+    activity_minutes?: number | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDashboard() {
+      const token = sessionStorage.getItem("sumancare_access_token");
+
+      if (!token) {
+        setDataError("Please log in to view your personal health data.");
+        setDataLoading(false);
+        return;
+      }
+
+      try {
+        const headers = {
+          Authorization: `Bearer ${token}`,
+        };
+
+        const [
+          patientResponse,
+          vitalsResponse,
+          riskResponse,
+          lifestyleResponse,
+        ] = await Promise.all([
+          fetch(`${API_BASE_URL}/auth/me`, { headers }),
+          fetch(`${API_BASE_URL}/vitals/`, { headers }),
+          fetch(`${API_BASE_URL}/health-risk/summary`, { headers }).catch(
+            () => null
+          ),
+          fetch(`${API_BASE_URL}/lifestyle/today`, { headers }).catch(
+            () => null
+          ),
+        ]);
+        const patientData = await patientResponse.json();
+        const vitalsData = await vitalsResponse.json();
+        if (lifestyleResponse?.ok) {
+          const lifestyle = await lifestyleResponse.json();
+
+          if (!cancelled) {
+            setLifestyleData(lifestyle);
+          }
+        }
+
+
+        if (patientResponse.status === 401 || vitalsResponse.status === 401) {
+          throw new Error("Your session has expired. Please log in again.");
+        }
+
+        if (!patientResponse.ok || !vitalsResponse.ok) {
+          throw new Error("Unable to load your health data.");
+        }
+
+        if (riskResponse?.ok) {
+          const riskData: MonitoringSummary = await riskResponse.json();
+
+          if (!cancelled) {
+            setMonitoringSummary(riskData);
+            setRiskStatus(
+              riskData.monitoring_level || "Not assessed"
+            );
+          }
+        }
+
+        if (cancelled) return;
+
+        setPatient(patientData);
+
+        const records: VitalRecord[] = Array.isArray(vitalsData)
+          ? vitalsData
+          : Array.isArray(vitalsData.items)
+            ? vitalsData.items
+            : [];
+
+        const currentPatientId = Number(
+          patientData.patient_id ?? patientData.id
+        );
+        console.log("Patient ID:", currentPatientId);
+        console.log("Vitals API response:", vitalsData);
+        console.log("Parsed records:", records);
+        console.log(
+          "Patient IDs in records:",
+          records.map((record) => record.patient_id)
+        );
+
+        const latest = records
+          .filter(
+            (record) => Number(record.patient_id) === currentPatientId
+          )
+          .sort((a, b) => b.id - a.id)[0];
+
+        console.log("Patient data:", patientData);
+        console.log("Vitals returned:", records);
+        console.log("Latest vital:", latest);
+
+        setLatestVital(latest || null);
+
+        setDataError("");
+      } catch (error) {
+        if (!cancelled) {
+          setDataError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load dashboard data."
+          );
+        }
+      } finally {
+        if (!cancelled) setDataLoading(false);
+      }
+    }
+
+    loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+
   /* ================================================= */
   /* AI CHAT STATE */
   /* ================================================= */
@@ -115,84 +326,61 @@ export default function HomePage() {
   /* AI CHAT RESPONSE */
   /* ================================================= */
 
-  const handleSend = (text: string) => {
-    const cleanText = text.trim();
 
+  const handleSend = (text: string) => {
+    console.log("handleSend called with:", text);
+
+    const cleanText = text.trim();
     if (!cleanText) return;
 
     setMessages((prev) => [
       ...prev,
-      {
-        role: "user",
-        text: cleanText,
-      },
+      { role: "user", text: cleanText },
     ]);
-
     setInput("");
 
-    setTimeout(() => {
-      let response =
-        "I can help you understand your health patterns. Based on the information currently available in SumanCare, your AI-assisted health risk score is 28/100 and currently appears stable.";
+    const question = cleanText.toLowerCase();
+    let response = "";
 
-      const lowerText = cleanText.toLowerCase();
+    if (question.includes("glucose") || question.includes("sugar")) {
+      response =
+        latestVital?.blood_glucose != null
+          ? `Your latest recorded blood glucose is ${latestVital.blood_glucose} mg/dL. A single reading does not provide a complete health assessment.`
+          : "No blood glucose reading is available in your records yet.";
+    } else if (question.includes("blood pressure") || question.includes(" bp")) {
+      response =
+        latestVital?.systolic_bp != null &&
+        latestVital?.diastolic_bp != null
+          ? `Your latest recorded blood pressure is ${latestVital.systolic_bp}/${latestVital.diastolic_bp} mmHg.`
+          : "No blood pressure reading is available in your records yet.";
+    } else if (question.includes("heart rate") || question.includes("heartbeat")) {
+      response =
+        latestVital?.heart_rate != null
+          ? `Your latest recorded heart rate is ${latestVital.heart_rate} BPM.`
+          : "No heart rate reading is available in your records yet.";
+    } else if (question.includes("weight")) {
+      response =
+        latestVital?.weight_kg != null
+          ? `Your latest recorded weight is ${latestVital.weight_kg} kg.`
+          : "No weight reading is available in your records yet.";
+    } else if (question.includes("risk") || question.includes("score")) {
+      response =
+        "A personalized health risk assessment is not connected yet.";
+    } else if (question.includes("today") || question.includes("health")) {
+      response = latestVital
+        ? "I can help you review your recorded blood pressure, heart rate, glucose and weight."
+        : "No health readings are available yet.";
+    } else {
+      response =
+        "Ask me about your recorded blood pressure, heart rate, glucose or weight.";
+    }
 
-      if (
-        lowerText.includes("risk") ||
-        lowerText.includes("score")
-      ) {
-        response =
-          "Your current AI-assisted health risk score is 28/100, shown as low and stable in this demo. Recent activity and medication adherence are contributing positively. This is an informational health insight, not a medical diagnosis.";
-      } else if (
-        lowerText.includes("medicine") ||
-        lowerText.includes("medication") ||
-        lowerText.includes("tablet")
-      ) {
-        response =
-          "Your medicine schedule currently shows today's medicines and their adherence status. Keeping your prescribed schedule consistent is important. If you miss a dose, follow your healthcare professional's instructions rather than changing the dose yourself.";
-      } else if (
-        lowerText.includes("water") ||
-        lowerText.includes("hydration")
-      ) {
-        response =
-          "Your dashboard currently shows 1.8 L of water against a 2.5 L daily goal. Staying adequately hydrated supports general wellbeing, although your ideal intake can vary depending on your health and your doctor's advice.";
-      } else if (
-        lowerText.includes("health today") ||
-        lowerText.includes("today")
-      ) {
-        response =
-          "Today's demo snapshot looks stable: blood pressure 118/76 mmHg, heart rate 72 BPM, 6,420 steps, and 1.8 L water. Your AI-assisted health risk score is 28/100.";
-      } else if (
-        lowerText.includes("improve") ||
-        lowerText.includes("better")
-      ) {
-        response =
-          "You can focus on consistent sleep, regular physical activity, hydration, medication adherence, and recording your daily health measurements. SumanCare can track these patterns over time.";
-      } else if (lowerText.includes("sleep")) {
-        response =
-          "Sleep is one of the lifestyle factors SumanCare can monitor. Consistent sleep patterns can support overall wellbeing. Your future health trend analysis can compare sleep with activity and other recorded health measurements.";
-      } else if (
-        lowerText.includes("glucose") ||
-        lowerText.includes("sugar")
-      ) {
-        response =
-          "Your current demo glucose reading is 102 mg/dL. SumanCare can help you track glucose patterns over time rather than relying on a single reading. Your personal targets should be based on your healthcare professional's advice.";
-      } else if (
-        lowerText.includes("blood pressure") ||
-        lowerText.includes("bp")
-      ) {
-        response =
-          "Your current demo blood pressure is 118/76 mmHg. SumanCare can track readings over time to help you notice changes and discuss them with your healthcare professional.";
-      }
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "ai",
-          text: response,
-        },
-      ]);
-    }, 700);
+    setMessages((prev) => [
+      ...prev,
+      { role: "ai", text: response },
+    ]);
   };
+
 
   return (
     <main className="min-h-screen bg-[#eef7f4] pb-24 text-[#14201d] sm:pb-0">
@@ -233,19 +421,21 @@ export default function HomePage() {
 
               {/* HAMBURGER */}
 
-              <div className="relative">
+              <div className="relative z-[100] pointer-events-auto">
 
                 <button
-                  type="button"
-                  onClick={() => setMenuOpen((prev) => !prev)}
-                  aria-label="Open menu"
-                  aria-expanded={menuOpen}
-                  className="flex h-11 w-11 items-center justify-center rounded-full border border-white bg-white/90 text-slate-600 shadow-[0_5px_20px_rgba(20,60,50,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_25px_rgba(20,60,50,0.10)]"
-                >
-                  <span className="text-xl leading-none">
-                    ☰
-                  </span>
-                </button>
+                type="button"
+                onClick={() => {
+                  setMenuOpen((prev) => !prev);
+                }}
+                aria-label="Open menu"
+                aria-expanded={menuOpen}
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-white bg-white/90 text-slate-600 shadow-[0_5px_20px_rgba(20,60,50,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_25px_rgba(20,60,50,0.10)]"
+              >
+                <span className="text-xl leading-none">
+                  {menuOpen ? "✕" : "☰"}
+                </span>
+              </button>
 
                 {/* ================================================= */}
                 {/* PROFILE / AUTH MENU */}
@@ -430,7 +620,7 @@ export default function HomePage() {
                 </p>
 
                 <h2 className="text-3xl font-medium tracking-[-0.04em] text-slate-800 sm:text-5xl">
-                  Hey, Vaibhav!
+                  Hey, {patient?.name || "there"}!
                 </h2>
 
                 <p className="mt-2 text-lg font-light text-slate-400 sm:text-xl">
@@ -522,15 +712,21 @@ export default function HomePage() {
 
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
 
                   <Reveal delay={100}>
                     <FeatureCard
                       icon={<ShieldAlert size={21} />}
                       title="AI Health Risk"
                       subtitle="Smart insight"
-                      value="28"
-                      suffix="/100"
+                      value={
+                          monitoringLoading
+                            ? "..."
+                            : monitoringSummary?.monitoring_score != null
+                              ? String(monitoringSummary.monitoring_score)
+                              : "—"
+                        }
+                      suffix={riskStatus.toLowerCase()}
                       accent="emerald"
                       href="/health-risk"
                     />
@@ -553,8 +749,16 @@ export default function HomePage() {
                       icon={<Activity size={21} />}
                       title="Daily Health"
                       subtitle="Performance"
-                      value="+4.2"
-                      suffix="%"
+                      value={
+                        lifestyleData?.steps != null
+                          ? lifestyleData.steps.toLocaleString("en-IN")
+                          : "—"
+                      }
+                      suffix={
+                        lifestyleData?.steps != null
+                          ? "steps"
+                          : "no data"
+                      }
                       accent="purple"
                       href="/health"
                     />
@@ -565,8 +769,16 @@ export default function HomePage() {
                       icon={<Droplets size={21} />}
                       title="Diabetes & Glucose"
                       subtitle="Glucose tracking"
-                      value="102"
-                      suffix=" mg/dL"
+                      value={
+                        latestVital?.blood_glucose != null
+                          ? String(latestVital.blood_glucose)
+                          : "—"
+                      }
+                      suffix={
+                        latestVital?.blood_glucose != null
+                          ? " mg/dL"
+                          : "no reading"
+                      }
                       accent="green"
                       href="/diabetes"
                     />
@@ -581,6 +793,17 @@ export default function HomePage() {
                       suffix=""
                       accent="rose"
                       href="/emergency"
+                    />
+                  </Reveal>
+                  <Reveal delay={400}>
+                    <FeatureCard
+                      icon={<TrendingUp size={21} />}
+                      title="Health Trends"
+                      subtitle="Track your progress"
+                      value="7"
+                      suffix="days"
+                      accent="emerald"
+                      href="/trends"
                     />
                   </Reveal>
 
@@ -649,24 +872,24 @@ export default function HomePage() {
                                 <HeartPulse size={18} />
                               </div>
 
-                              <div>
+                             <div className="min-w-0">
 
-                                <span className="block text-sm font-semibold text-slate-600">
-                                  AI Health Risk
-                                </span>
+                              <p className="mt-1 text-sm font-semibold text-slate-700">
+                                {monitoringLoading
+                                  ? "Loading..."
+                                  : monitoringSummary?.monitoring_level ?? "Not assessed"}
+                              </p>
 
-                                <span className="text-[10px] text-slate-400">
-                                  Latest analysis
-                                </span>
-
-                              </div>
-
+                              <p className="mt-1 text-xs text-slate-400">
+                                Latest analysis
+                              </p>
+                            </div>
                             </div>
 
                             <div className="mt-6 flex items-end gap-2">
 
                               <span className="text-6xl font-semibold tracking-[-0.07em] text-slate-800">
-                                28
+                                {monitoringSummary?.monitoring_score ?? "—"}
                               </span>
 
                               <span className="mb-2 text-sm text-slate-400">
@@ -675,27 +898,16 @@ export default function HomePage() {
 
                             </div>
 
-                            <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/80 px-3 py-1.5 shadow-sm">
-
-                              <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_7px_rgba(16,185,129,0.5)]" />
-
-                              <span className="text-xs font-semibold text-emerald-700">
-                                Low risk
-                              </span>
-
-                            </div>
-
+                           <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/80 px-3 py-1.5 shadow-sm">
+                            <span
+                              className={`h-2 w-2 rounded-full ${
+                                monitoringSummary ? "bg-emerald-500" : "bg-slate-400"
+                              }`}
+                            />
+                            <span className="text-xs font-semibold text-slate-700">
+                              {monitoringSummary?.monitoring_level ?? "Not assessed"}
+                            </span>
                           </div>
-
-                          <div className="hidden h-24 w-24 items-center justify-center rounded-full border-[8px] border-emerald-200/70 bg-white/30 sm:flex">
-
-                            <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white bg-white shadow-sm">
-
-                              <span className="text-xs font-bold text-emerald-700">
-                                28%
-                              </span>
-
-                            </div>
 
                           </div>
 
@@ -710,15 +922,18 @@ export default function HomePage() {
                             </span>
 
                             <span>
-                              Stable
+                              {monitoringSummary?.monitoring_level ?? "Not assessed"}
                             </span>
 
                           </div>
 
                           <div className="h-2 overflow-hidden rounded-full bg-white/80 shadow-inner">
-
-                            <div className="h-full w-[28%] rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.25)]" />
-
+                            <div
+                              className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                              style={{
+                                width: `${monitoringSummary?.monitoring_score ?? 0}%`,
+                              }}
+                            />
                           </div>
 
                         </div>
@@ -747,9 +962,14 @@ export default function HomePage() {
                       <MetricCard
                         icon={<HeartPulse size={18} />}
                         label="Blood Pressure"
-                        value="118/76"
+                        value={
+                        latestVital?.systolic_bp != null &&
+                        latestVital?.diastolic_bp != null
+                          ? `${latestVital.systolic_bp}/${latestVital.diastolic_bp}`
+                          : "—"
+                      }
                         unit="mmHg"
-                        trend="Normal"
+                        trend="Latest reading"
                       />
                     </Reveal>
 
@@ -757,29 +977,37 @@ export default function HomePage() {
                       <MetricCard
                         icon={<Activity size={18} />}
                         label="Heart Rate"
-                        value="72"
+                        value={latestVital?.heart_rate != null ? String(latestVital.heart_rate) : "—"}
                         unit="BPM"
-                        trend="Normal"
+                        trend="Latest reading"
                       />
                     </Reveal>
 
                     <Reveal delay={250}>
                       <MetricCard
                         icon={<Droplets size={18} />}
-                        label="Water"
-                        value="1.8"
-                        unit="/ 2.5 L"
-                        trend="72%"
+                        label="Blood Glucose"
+                        value={
+                          latestVital?.blood_glucose != null
+                            ? String(latestVital.blood_glucose)
+                            : "—"
+                        }
+                        unit="mg/dL"
+                        trend="Latest reading"
                       />
                     </Reveal>
 
                     <Reveal delay={300}>
                       <MetricCard
                         icon={<TrendingUpIcon />}
-                        label="Activity"
-                        value="6,420"
-                        unit="steps"
-                        trend="+8%"
+                        label="Weight"
+                        value={
+                          latestVital?.weight_kg != null
+                            ? String(latestVital.weight_kg)
+                            : "—"
+                        }
+                        unit="kg"
+                        trend="Latest reading"
                       />
                     </Reveal>
 
@@ -1087,9 +1315,9 @@ export default function HomePage() {
           </button>
 
           <BottomNavItem
-            icon={<Pill size={20} />}
-            label="Medicine"
-            href="/medicines"
+            icon={<TrendingUp size={20} />}
+            label="Trends"
+            href="/trends"
           />
 
           <BottomNavItem
@@ -1222,7 +1450,7 @@ export default function HomePage() {
 
                   {[
                     "How is my health today?",
-                    "Why is my risk score 28?",
+                    "Why is my risk score N/A?",
                     "What should I improve?",
                   ].map((question) => (
 
@@ -1266,9 +1494,15 @@ export default function HomePage() {
                 />
 
                 <button
-                  type="submit"
+                  type="button"
                   disabled={!input.trim()}
                   aria-label="Send message"
+                  onClick={() => {
+                    if (input.trim()) {
+                      console.log("Send clicked", input);
+                      handleSend(input);
+                    }
+                  }}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-sm transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Send size={16} />

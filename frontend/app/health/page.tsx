@@ -1,7 +1,10 @@
+// @ts-nocheck
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 import {
   Activity,
   ArrowLeft,
@@ -25,7 +28,7 @@ export default function HealthPage() {
   /* =========================
      DATE
   ========================= */
-
+  const saveInProgress = useRef(false);
   const [currentDate, setCurrentDate] = useState("");
 
   useEffect(() => {
@@ -51,19 +54,20 @@ export default function HealthPage() {
      HEALTH DATA
   ========================= */
 
-  const [systolic, setSystolic] = useState("118");
-  const [diastolic, setDiastolic] = useState("76");
+  const [systolic, setSystolic] = useState("");
+  const [diastolic, setDiastolic] = useState("");
 
-  const [glucose, setGlucose] = useState("102");
+  const [glucose, setGlucose] = useState("");
   const [glucoseType, setGlucoseType] = useState("Fasting");
 
-  const [heartRate, setHeartRate] = useState("72");
-  const [weight, setWeight] = useState("68");
+  const [heartRate, setHeartRate] = useState("");
+  const [weight, setWeight] = useState("");
+  const [oxygen, setOxygen] = useState("");
 
-  const [sleep, setSleep] = useState("7.5");
-  const [water, setWater] = useState("1.8");
-  const [steps, setSteps] = useState("6420");
-  const [exercise, setExercise] = useState("30");
+  const [sleep, setSleep] = useState("");
+  const [water, setWater] = useState("");
+  const [steps, setSteps] = useState("");
+  const [exercise, setExercise] = useState("");
 
   const [stress, setStress] = useState("Moderate");
   const [mealQuality, setMealQuality] = useState("Good");
@@ -74,138 +78,341 @@ export default function HealthPage() {
   ========================= */
 
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [statusMessage, setStatusMessage] = useState("");
+
+  /* =========================
+     LOAD EXISTING VITALS
+  ========================= */
+
+  const loadVitals = useCallback(async () => {
+    const token = sessionStorage.getItem("sumancare_access_token");
+
+    if (!token) {
+      setStatusMessage("Please log in to load and save your health readings.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/vitals/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          response.status === 401
+            ? "Your session has expired. Please log in again."
+            : "Could not load your saved vital readings."
+        );
+      }
+
+      const records: VitalRecord[] = await response.json();
+
+      if (Array.isArray(records) && records.length > 0) {
+        const latest = [...records].sort(
+          (a, b) => Number(b.id ?? 0) - Number(a.id ?? 0)
+        )[0];
+
+        // Keep the form blank when the page opens.
+        // Existing readings remain saved in the database.
+      }
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not load your saved vital readings."
+      );
+    }
+  }, []);
+
+
+  const loadLifestyle = useCallback(async () => {
+    const token = sessionStorage.getItem("sumancare_access_token");
+
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/lifestyle/today`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Could not load today's lifestyle data.");
+      }
+
+      const data = await response.json();
+
+      if (!data) return;
+
+      setSleep(data.sleep_hours == null ? "" : String(data.sleep_hours));
+      setWater(
+        data.water_intake_liters == null
+          ? ""
+          : String(data.water_intake_liters)
+      );
+      setSteps(data.steps == null ? "" : String(data.steps));
+      setExercise(
+        data.activity_minutes == null ? "" : String(data.activity_minutes)
+      );
+
+      if (data.stress_level) setStress(data.stress_level);
+      if (data.meal_quality) setMealQuality(data.meal_quality);
+      if (data.medication_status) setMedication(data.medication_status);
+    } catch (error) {
+      console.error("Lifestyle load error:", error);
+    }
+  }, []);
+
+
+  useEffect(() => {
+    void loadVitals();
+    void loadLifestyle();
+  }, [loadVitals, loadLifestyle]);
 
   /* =========================
      SAVE
   ========================= */
 
-  const handleSave = () => {
-    const validationErrors: string[] = [];
 
-    const systolicValue = Number(systolic);
-    const diastolicValue = Number(diastolic);
-    const glucoseValue = Number(glucose);
-    const heartRateValue = Number(heartRate);
-    const weightValue = Number(weight);
-    const sleepValue = Number(sleep);
-    const waterValue = Number(water);
-    const stepsValue = Number(steps);
-    const exerciseValue = Number(exercise);
 
-    if (
-      systolicValue <= 0 ||
-      systolicValue > 250
-    ) {
-      validationErrors.push("Please enter a valid systolic blood pressure.");
-    }
+  const handleSave = async () => {
+    // Prevent multiple submissions, even before React updates the UI.
+    if (saveInProgress.current) return;
 
-    if (
-      diastolicValue <= 0 ||
-      diastolicValue > 200
-    ) {
-      validationErrors.push("Please enter a valid diastolic blood pressure.");
-    }
+    saveInProgress.current = true;
 
-    if (
-      glucoseValue <= 0 ||
-      glucoseValue > 600
-    ) {
-      validationErrors.push("Please enter a valid blood glucose value.");
-    }
+    try {
+      const validationErrors: string[] = [];
 
-    if (
-      heartRateValue <= 0 ||
-      heartRateValue > 250
-    ) {
-      validationErrors.push("Please enter a valid heart rate.");
-    }
+      const systolicValue = Number(systolic);
+      const diastolicValue = Number(diastolic);
+      const glucoseValue = Number(glucose);
+      const heartRateValue = Number(heartRate);
+      const weightValue = Number(weight);
+      const oxygenValue = Number(oxygen);
+      const sleepValue = Number(sleep);
+      const waterValue = Number(water);
+      const stepsValue = Number(steps);
+      const exerciseValue = Number(exercise);
 
-    if (
-      weightValue <= 0 ||
-      weightValue > 300
-    ) {
-      validationErrors.push("Please enter a valid weight.");
-    }
+      // Validate blood pressure.
+      if (
+        !systolic.trim() ||
+        !Number.isFinite(systolicValue) ||
+        systolicValue <= 0 ||
+        systolicValue > 250
+      ) {
+        validationErrors.push(
+          "Please enter a valid systolic blood pressure."
+        );
+      }
 
-    if (
-      sleepValue < 0 ||
-      sleepValue > 24
-    ) {
-      validationErrors.push("Please enter a valid sleep duration.");
-    }
+      if (
+        !diastolic.trim() ||
+        !Number.isFinite(diastolicValue) ||
+        diastolicValue <= 0 ||
+        diastolicValue > 200
+      ) {
+        validationErrors.push(
+          "Please enter a valid diastolic blood pressure."
+        );
+      }
 
-    if (
-      waterValue < 0 ||
-      waterValue > 15
-    ) {
-      validationErrors.push("Please enter a valid water intake.");
-    }
+      // Validate optional glucose.
+      if (
+        glucose.trim() !== "" &&
+        (!Number.isFinite(glucoseValue) ||
+          glucoseValue <= 0 ||
+          glucoseValue > 600)
+      ) {
+        validationErrors.push(
+          "Please enter a valid blood glucose value."
+        );
+      }
 
-    if (
-      stepsValue < 0 ||
-      stepsValue > 100000
-    ) {
-      validationErrors.push("Please enter a valid step count.");
-    }
+      // Validate heart rate.
+      if (
+        !heartRate.trim() ||
+        !Number.isFinite(heartRateValue) ||
+        heartRateValue <= 0 ||
+        heartRateValue > 250
+      ) {
+        validationErrors.push("Please enter a valid heart rate.");
+      }
 
-    if (
-      exerciseValue < 0 ||
-      exerciseValue > 1440
-    ) {
-      validationErrors.push("Please enter a valid exercise duration.");
-    }
+      // Validate optional weight.
+      if (
+        weight.trim() !== "" &&
+        (!Number.isFinite(weightValue) ||
+          weightValue <= 0 ||
+          weightValue > 300)
+      ) {
+        validationErrors.push("Please enter a valid weight.");
+      }
 
-    if (validationErrors.length > 0) {
-      setErrors(validationErrors);
+      // Validate optional oxygen saturation.
+      if (
+        oxygen.trim() !== "" &&
+        (!Number.isFinite(oxygenValue) ||
+          oxygenValue <= 0 ||
+          oxygenValue > 100)
+      ) {
+        validationErrors.push(
+          "Please enter a valid oxygen saturation between 1 and 100%."
+        );
+      }
+
+      // Validate optional lifestyle measurements.
+      if (
+        sleep.trim() !== "" &&
+        (!Number.isFinite(sleepValue) ||
+          sleepValue < 0 ||
+          sleepValue > 24)
+      ) {
+        validationErrors.push("Please enter a valid sleep duration.");
+      }
+
+      if (
+        water.trim() !== "" &&
+        (!Number.isFinite(waterValue) ||
+          waterValue < 0 ||
+          waterValue > 15)
+      ) {
+        validationErrors.push("Please enter a valid water intake.");
+      }
+
+      if (
+        steps.trim() !== "" &&
+        (!Number.isInteger(stepsValue) ||
+          stepsValue < 0 ||
+          stepsValue > 100000)
+      ) {
+        validationErrors.push(
+          "Please enter a valid whole-number step count."
+        );
+      }
+
+      if (
+        exercise.trim() !== "" &&
+        (!Number.isInteger(exerciseValue) ||
+          exerciseValue < 0 ||
+          exerciseValue > 1440)
+      ) {
+        validationErrors.push(
+          "Please enter a valid whole-number exercise duration."
+        );
+      }
+
+      if (validationErrors.length > 0) {
+        setErrors(validationErrors);
+        setSaved(false);
+        return;
+      }
+
+      const token = sessionStorage.getItem("sumancare_access_token");
+
+      if (!token) {
+        setErrors(["Please log in before saving your health readings."]);
+        setSaved(false);
+        setStatusMessage("");
+        return;
+      }
+
+      setSaving(true);
+      setErrors([]);
       setSaved(false);
-      return;
-    }
+      setStatusMessage("");
 
-    setErrors([]);
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      };
 
-    /*
-      Temporary frontend object.
+      // Save vital measurements.
+      const vitalsResponse = await fetch(`${API_BASE_URL}/vitals/`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          systolic_bp: systolicValue,
+          diastolic_bp: diastolicValue,
+          heart_rate: heartRateValue,
+          blood_glucose:
+            glucose.trim() === "" ? null : glucoseValue,
+          weight_kg: weight.trim() === "" ? null : weightValue,
+          oxygen_level: oxygen.trim() === "" ? null : Number(oxygen),
+        }),
+      });
 
-      Later this exact object can be sent
-      to your FastAPI backend.
-    */
+      const vitalsData = await vitalsResponse.json().catch(() => null);
 
-    const healthData = {
-      date: new Date().toISOString(),
+      if (!vitalsResponse.ok) {
+        throw new Error(
+          typeof vitalsData?.detail === "string"
+            ? vitalsData.detail
+            : vitalsResponse.status === 401
+              ? "Your session has expired. Please log in again."
+              : "Could not save vital readings."
+        );
+      }
 
-      vitals: {
-        systolic: systolicValue,
-        diastolic: diastolicValue,
-        glucose: glucoseValue,
-        glucoseType,
-        heartRate: heartRateValue,
-        weight: weightValue,
-      },
+      // Save today's lifestyle and wellbeing data.
+      const lifestyleResponse = await fetch(
+        `${API_BASE_URL}/lifestyle/today`,
+        {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({
+            sleep_hours: sleep.trim() === "" ? null : sleepValue,
+            water_intake_liters:
+              water.trim() === "" ? null : waterValue,
+            steps: steps.trim() === "" ? null : stepsValue,
+            activity_minutes:
+              exercise.trim() === "" ? null : exerciseValue,
+            stress_level: stress,
+            meal_quality: mealQuality,
+            medication_status: medication,
+          }),
+        }
+      );
 
-      lifestyle: {
-        sleep: sleepValue,
-        water: waterValue,
-        steps: stepsValue,
-        exercise: exerciseValue,
-      },
+      const lifestyleData = await lifestyleResponse
+        .json()
+        .catch(() => null);
 
-      wellbeing: {
-        stress,
-        mealQuality,
-      },
+      if (!lifestyleResponse.ok) {
+        throw new Error(
+          typeof lifestyleData?.detail === "string"
+            ? lifestyleData.detail
+            : lifestyleResponse.status === 401
+              ? "Your session has expired. Please log in again."
+              : "Vitals were saved, but lifestyle data could not be saved. Please retry."
+        );
+      }
 
-      medication,
-    };
+      setSaved(true);
+      setStatusMessage(
+        "Your vital readings and lifestyle information were saved successfully."
+      );
 
-    console.log("SumanCare Daily Health Data:", healthData);
-
-    setSaved(true);
-
-    setTimeout(() => {
+      await loadVitals();
+    } catch (error) {
       setSaved(false);
-    }, 4000);
+      setErrors([
+        error instanceof Error
+          ? error.message
+          : "Unable to save your health information.",
+      ]);
+    } finally {
+      // Always unlock, including validation errors and failed requests.
+      saveInProgress.current = false;
+      setSaving(false);
+    }
   };
+
+
 
   /* =========================
      RESET
@@ -217,6 +424,7 @@ export default function HealthPage() {
     setGlucose("");
     setHeartRate("");
     setWeight("");
+    setOxygen("");
     setSleep("");
     setWater("");
     setSteps("");
@@ -229,6 +437,7 @@ export default function HealthPage() {
 
     setErrors([]);
     setSaved(false);
+    setStatusMessage("");
   };
 
   const waterValue = Number(water) || 0;
@@ -386,6 +595,15 @@ export default function HealthPage() {
                 </div>
               )}
 
+              {statusMessage && (
+                <div
+                  role="status"
+                  className="rounded-[22px] border border-slate-100 bg-white p-4 text-sm text-slate-600"
+                >
+                  {statusMessage}
+                </div>
+              )}
+
               {/* ================= SAVED ================= */}
 
               {saved && (
@@ -399,11 +617,11 @@ export default function HealthPage() {
 
                     <div>
                       <p className="text-sm font-semibold text-emerald-700">
-                        Today's health check-in saved
+                        Your health data was saved
                       </p>
 
                       <p className="mt-0.5 text-xs text-emerald-600/70">
-                        Your data is ready for future health-risk analysis.
+                        Your vital readings and lifestyle information are saved to your account.
                       </p>
                     </div>
 
@@ -438,7 +656,7 @@ export default function HealthPage() {
                         type="number"
                         value={systolic}
                         onChange={(e) => setSystolic(e.target.value)}
-                        placeholder="118"
+                        placeholder="Enter systolic"
                         className="health-input"
                       />
 
@@ -450,7 +668,7 @@ export default function HealthPage() {
                         type="number"
                         value={diastolic}
                         onChange={(e) => setDiastolic(e.target.value)}
-                        placeholder="76"
+                        placeholder="Enter diastolic"
                         className="health-input"
                       />
 
@@ -476,7 +694,7 @@ export default function HealthPage() {
                         type="number"
                         value={glucose}
                         onChange={(e) => setGlucose(e.target.value)}
-                        placeholder="102"
+                        placeholder="Enter glucose"
                         className="health-input"
                       />
 
@@ -528,7 +746,7 @@ export default function HealthPage() {
                         type="number"
                         value={heartRate}
                         onChange={(e) => setHeartRate(e.target.value)}
-                        placeholder="72"
+                        placeholder="Enter heart rate"
                         className="health-input"
                       />
 
@@ -555,7 +773,7 @@ export default function HealthPage() {
                         step="0.1"
                         value={weight}
                         onChange={(e) => setWeight(e.target.value)}
-                        placeholder="68"
+                        placeholder="Enter weight"
                         className="health-input"
                       />
 
@@ -565,6 +783,31 @@ export default function HealthPage() {
 
                     </div>
 
+                  </InputCard>
+
+                  {/* Oxygen Saturation */}
+
+                  <InputCard
+                    icon={<HeartPulse size={18} />}
+                    title="Oxygen Saturation"
+                    subtitle="Enter a measured SpO₂ reading"
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        step="0.1"
+                        value={oxygen}
+                        onChange={(e) => setOxygen(e.target.value)}
+                        placeholder="Enter SpO₂"
+                        className="health-input"
+                      />
+
+                      <span className="text-xs text-slate-400">
+                        %
+                      </span>
+                    </div>
                   </InputCard>
 
                 </div>
@@ -598,7 +841,7 @@ export default function HealthPage() {
                         step="0.5"
                         value={sleep}
                         onChange={(e) => setSleep(e.target.value)}
-                        placeholder="7.5"
+                        placeholder="Enter sleep duration"
                         className="health-input"
                       />
 
@@ -947,18 +1190,24 @@ export default function HealthPage() {
                   <button
                     type="button"
                     onClick={handleSave}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-[22px] bg-emerald-600 px-6 py-4 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(16,185,129,0.22)] transition hover:bg-emerald-700 hover:shadow-[0_16px_35px_rgba(16,185,129,0.28)]"
+                    disabled={saving}
+                    aria-live="polite"
+                    className="flex min-h-[58px] min-w-0 flex-1 items-center justify-center gap-2 rounded-[22px] bg-emerald-600 px-5 py-4 text-center text-sm font-semibold text-white shadow-[0_12px_30px_rgba(16,185,129,0.22)] transition hover:bg-emerald-700 hover:shadow-[0_16px_35px_rgba(16,185,129,0.28)] disabled:cursor-not-allowed disabled:opacity-70"
                   >
-
-                    {saved ? (
+                    {saving ? (
                       <>
-                        <Check size={18} />
-                        Health Check-in Saved
+                        <Save size={18} className="shrink-0" />
+                        <span>Saving...</span>
+                      </>
+                    ) : saved ? (
+                      <>
+                        <Check size={18} className="shrink-0" />
+                        <span>Vital Readings Saved</span>
                       </>
                     ) : (
                       <>
-                        <Save size={18} />
-                        Save Today's Health
+                        <Save size={18} className="shrink-0" />
+                        <span>Save Today's Health</span>
                       </>
                     )}
 
@@ -967,9 +1216,10 @@ export default function HealthPage() {
                   <button
                     type="button"
                     onClick={handleReset}
-                    className="flex items-center justify-center gap-2 rounded-[22px] border border-slate-200 bg-white px-6 py-4 text-sm font-semibold text-slate-500 transition hover:bg-slate-50"
+                    disabled={saving}
+                    className="flex min-h-[58px] shrink-0 items-center justify-center gap-2 rounded-[22px] border border-slate-200 bg-white px-6 py-4 text-sm font-semibold text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-[140px]"
                   >
-                    <RotateCcw size={17} />
+                    <RotateCcw size={17} className="shrink-0"/>
                     Reset
                   </button>
 

@@ -44,4 +44,3 @@ medical_reports, emergency_contacts.
 
 ## Status
 Awaiting backend model and API contract review.
-

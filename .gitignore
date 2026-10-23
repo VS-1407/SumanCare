@@ -17,3 +17,22 @@ reports/
 *.dump
 *.bak
 database/*backup*.sql
+
+# Local environment and dependencies
+node_modules/
+.env
+.env.*
+!.env.example
+
+# Archives and local backups
+*.zip
+*.sql
+*.dump
+*.bak
+
+# AI/ML generated artifacts and private datasets
+ai_ml/data/
+ai_ml/models/
+
+# Local editor settings
+.vscode/
