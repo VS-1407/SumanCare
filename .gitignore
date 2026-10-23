@@ -32,7 +32,8 @@ node_modules/
 
 # AI/ML generated artifacts and private datasets
 ai_ml/data/
-ai_ml/models/
+ai_ml/models/*
+!ai_ml/models/diabetes_calibrated.joblib
 
 # Local editor settings
 .vscode/
