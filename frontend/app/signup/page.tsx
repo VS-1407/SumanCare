@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, type FormEvent } from "react";
@@ -14,8 +15,44 @@ import {
   LoaderCircle,
 } from "lucide-react";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+).replace(/\/+$/, "");
+
+type ApiError = {
+  detail?: string | { msg?: string; message?: string }[];
+  message?: string;
+};
+
+function getErrorMessage(data: ApiError | null, status: number): string {
+  if (typeof data?.detail === "string") {
+    return data.detail;
+  }
+
+  if (Array.isArray(data?.detail)) {
+    return data.detail
+      .map((item) => item.msg || item.message || "Invalid input")
+      .join(". ");
+  }
+
+  if (typeof data?.message === "string") {
+    return data.message;
+  }
+
+  if (status === 409) {
+    return "An account with these details may already exist.";
+  }
+
+  if (status === 422) {
+    return "Please check the information you entered.";
+  }
+
+  if (status >= 500) {
+    return "The server encountered an error. Please try again later.";
+  }
+
+  return `Unable to create your account (HTTP ${status}).`;
+}
 
 export default function SignupPage() {
   const [name, setName] = useState("");
@@ -42,6 +79,11 @@ export default function SignupPage() {
       return;
     }
 
+    if (!API_BASE_URL) {
+      setError("The API URL is not configured.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -49,6 +91,7 @@ export default function SignupPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
         body: JSON.stringify({
           name: name.trim(),
@@ -58,24 +101,33 @@ export default function SignupPage() {
         }),
       });
 
+      const responseText = await response.text();
+      let data: ApiError | null = null;
 
-      const data = await response.json().catch(() => null);
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText) as ApiError;
+        } catch {
+          data = null;
+        }
+      }
 
       if (!response.ok) {
-        throw new Error(
-          typeof data?.detail === "string"
-            ? data.detail
-            : typeof data?.message === "string"
-              ? data.message
-              : "Unable to create your account. Please try again."
-        );
+        console.error("Signup API error:", {
+          status: response.status,
+          response: data ?? responseText,
+        });
+
+        throw new Error(getErrorMessage(data, response.status));
       }
 
       window.location.assign("/login?registered=true");
     } catch (err) {
+      console.error("Signup request failed:", err);
+
       if (err instanceof TypeError) {
         setError(
-          "Unable to connect to the server. Signup will work once the backend is running."
+          "The request could not reach the API. Check your internet connection, API URL, and browser Network tab."
         );
       } else {
         setError(
@@ -145,14 +197,17 @@ export default function SignupPage() {
 
             <form onSubmit={handleSignup} className="space-y-4">
               <div>
-                <label htmlFor="name" className="mb-2 block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="name"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
                   Full name
                 </label>
                 <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 transition focus-within:border-emerald-500 focus-within:bg-white">
                   <UserRound size={19} className="text-gray-400" />
                   <input
                     id="name"
-                    name="full_name"
+                    name="name"
                     type="text"
                     required
                     autoComplete="name"
@@ -165,7 +220,10 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <label htmlFor="email" className="mb-2 block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="email"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
                   Email address
                 </label>
                 <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 transition focus-within:border-emerald-500 focus-within:bg-white">
@@ -185,7 +243,10 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <label htmlFor="phone" className="mb-2 block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="phone"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
                   Phone number
                 </label>
                 <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 transition focus-within:border-emerald-500 focus-within:bg-white">
@@ -205,7 +266,10 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <label htmlFor="password" className="mb-2 block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="password"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
                   Password
                 </label>
                 <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 transition focus-within:border-emerald-500 focus-within:bg-white">
@@ -224,7 +288,7 @@ export default function SignupPage() {
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
+                    onClick={() => setShowPassword((value) => !value)}
                     className="text-gray-400 hover:text-gray-600"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
@@ -234,14 +298,17 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="mb-2 block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="confirmPassword"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
                   Confirm password
                 </label>
                 <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 transition focus-within:border-emerald-500 focus-within:bg-white">
                   <Lock size={19} className="text-gray-400" />
                   <input
                     id="confirmPassword"
-                    name="confirm_password"
+                    name="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
                     required
                     autoComplete="new-password"
@@ -252,17 +319,29 @@ export default function SignupPage() {
                   />
                   <button
                     type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    onClick={() =>
+                      setShowConfirmPassword((value) => !value)
+                    }
                     className="text-gray-400 hover:text-gray-600"
-                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                    aria-label={
+                      showConfirmPassword ? "Hide password" : "Show password"
+                    }
                   >
-                    {showConfirmPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                    {showConfirmPassword ? (
+                      <EyeOff size={19} />
+                    ) : (
+                      <Eye size={19} />
+                    )}
                   </button>
                 </div>
               </div>
 
               {error && (
-                <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                <p
+                  role="alert"
+                  aria-live="polite"
+                  className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-600"
+                >
                   {error}
                 </p>
               )}
@@ -287,14 +366,16 @@ export default function SignupPage() {
 
             <p className="mt-7 text-center text-sm text-gray-500">
               Already have an account?{" "}
-              <Link href="/login" className="font-semibold text-emerald-600 hover:text-emerald-700">
+              <Link
+                href="/login"
+                className="font-semibold text-emerald-600 hover:text-emerald-700"
+              >
                 Login
               </Link>
             </p>
 
             <p className="mt-6 text-center text-xs leading-5 text-gray-400">
-              Your account will be connected to secure authentication when
-              backend integration is complete.
+              Your health information is handled by the SumanCare backend.
             </p>
           </div>
         </section>
