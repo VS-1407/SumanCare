@@ -22,7 +22,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS configuration for Vercel frontend and local development
+# CORS configuration — add middleware only once
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -36,9 +36,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Existing database tables ko automatically create/alter nahi karna.
-# Base.metadata.create_all(bind=engine)
 
 # Register API routers
 app.include_router(auth.router)
@@ -57,6 +54,7 @@ def root():
     return {
         "message": "Welcome to SumanCare API",
         "status": "running",
+        "version": "1.0.0",
     }
 
 
