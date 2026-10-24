@@ -79,6 +79,13 @@ type EmergencyCase = {
   destination_distance_m?: number | null;
   destination_source?: string | null;
 };
+type SOSResponse = {
+  message: string;
+  emergency_id: number;
+  status: string;
+  family_emails_submitted: number;
+  email_failures: number;
+};
 
 type PatientProfile = {
   full_name?: string;
@@ -493,10 +500,10 @@ export default function EmergencyPage() {
     }
   }
 
+  
   async function handleSOS() {
     setError("");
     setNotice("");
-
     setSubmitting(true);
 
     try {
@@ -511,12 +518,11 @@ export default function EmergencyPage() {
         }
       }
 
-      const created = await apiRequest<EmergencyCase>("/emergencies", {
+      const created = await apiRequest<SOSResponse>("/emergencies/sos", {
         method: "POST",
         body: JSON.stringify({
           latitude: coords?.latitude ?? null,
           longitude: coords?.longitude ?? null,
-          location_accuracy_m: coords?.accuracy ?? null,
           emergency_type: "medical",
           description:
             "Emergency assistance requested from SumanCare dashboard.",
@@ -524,11 +530,14 @@ export default function EmergencyPage() {
       });
 
       setNotice(
-        `Emergency request #${created.emergency_id} was saved. ${
-          coords
-            ? "GPS coordinates were included."
-            : "It was saved without GPS coordinates."
-        } No ambulance or hospital has been notified.`,
+        `Emergency #${created.emergency_id} recorded. ` +
+          `${created.family_emails_submitted} family email alert(s) submitted. ` +
+          (created.email_failures > 0
+            ? `${created.email_failures} email request(s) failed. `
+            : "") +
+          (coords
+            ? `GPS accuracy: approximately ${Math.round(coords.accuracy)} m.`
+            : "Location unavailable; SOS submitted without GPS."),
       );
 
       await loadCases();
@@ -536,12 +545,13 @@ export default function EmergencyPage() {
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to create emergency request.",
+          : "Unable to submit SOS request.",
       );
     } finally {
       setSubmitting(false);
     }
   }
+
 
   async function handleCancel(emergencyId: number) {
     setError("");
