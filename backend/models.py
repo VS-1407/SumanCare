@@ -1,5 +1,6 @@
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Integer,
     BigInteger,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     UniqueConstraint,
     func,
+    boolean,
 )
 
 from .database import Base
@@ -227,4 +229,42 @@ class EmergencyEvent(Base):
         DateTime,
         nullable=False,
         server_default=func.now(),
+    )
+
+
+class EmergencyContact(Base):
+    __tablename__ = "emergency_contacts"
+
+    id = Column("contact_id", BigInteger, primary_key=True, index=True)
+
+    patient_id = Column(
+        Integer,
+        ForeignKey("patients.patient_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    contact_name = Column(String(100), nullable=False)
+    relationship = Column(String(50), nullable=True)
+    email = Column(String(255), nullable=True)
+    phone = Column(String(20), nullable=True)
+
+    email_alert_enabled = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    whatsapp_alert_enabled = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    consent_confirmed = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+
+    created_at = Column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
