@@ -12,7 +12,6 @@ from sqlalchemy import (
     ForeignKey,
     UniqueConstraint,
     func,
-    boolean,
 )
 
 from .database import Base
