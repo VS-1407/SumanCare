@@ -15,6 +15,7 @@ from .routers import (
     emergencies,
     ambulance_tracking,
     emergency_contacts,
+    test_email,
 )
 
 app = FastAPI(
@@ -49,6 +50,7 @@ app.include_router(ml_research.router)
 app.include_router(emergencies.router)
 app.include_router(ambulance_tracking.router)
 app.include_router(emergency_contacts.router)
+app.include_router(test_email.router)
 
 @app.get("/")
 def root():
